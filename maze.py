@@ -7,6 +7,7 @@ from collections import deque
 import pygame
 
 from settings import (
+    CRYSTAL_COLOR,
     DOOR_COLOR,
     EXIT_COLOR,
     FLOOR_COLOR,
@@ -17,6 +18,7 @@ from settings import (
     SOUND_DIR,
     TILE_SIZE,
     WALL_COLOR,
+    WHITE,
 )
 
 
@@ -39,6 +41,7 @@ class Maze:
         self.grid = [["#" for _ in range(self.cols)] for _ in range(self.rows)]
         self.start = (1, 1)
         self.exit_position = self.start
+        self.crystal_positions = []
 
         self.images = {
             "#": self.load_image("wall.png"),
@@ -145,6 +148,21 @@ class Maze:
         self.grid[key_y][key_x] = "K"
         self.grid[door_y][door_x] = "D"
         self.grid[exit_y][exit_x] = "E"
+        available_indices = [
+            index
+            for index in range(1, len(path) - 1)
+            if index not in (key_index, door_index)
+        ]
+        if len(available_indices) < 3:
+            raise ValueError("Generated maze path is too short for its crystals.")
+
+        for target in (len(path) // 5, len(path) // 2, (len(path) * 5) // 6):
+            index = min(available_indices, key=lambda candidate: abs(candidate - target))
+            available_indices.remove(index)
+            crystal_x, crystal_y = path[index]
+            self.grid[crystal_y][crystal_x] = "C"
+            self.crystal_positions.append((crystal_x, crystal_y))
+
         self.exit_position = exit_position
 
     @staticmethod
@@ -156,7 +174,7 @@ class Maze:
             current = parents[current]
         return distance
 
-    def can_enter(self, x, y, has_key):
+    def can_enter(self, x, y, has_key, crystals_collected=0):
         if not (0 <= x < self.cols and 0 <= y < self.rows):
             return False
 
@@ -164,6 +182,8 @@ class Maze:
         if tile == "#":
             return False
         if tile == "D" and not has_key:
+            return False
+        if tile == "E" and crystals_collected < len(self.crystal_positions):
             return False
         return True
 
@@ -185,9 +205,23 @@ class Maze:
                         "K": KEY_COLOR,
                         "D": DOOR_COLOR,
                         "E": EXIT_COLOR,
+                        "C": CRYSTAL_COLOR,
                     }
                     pygame.draw.rect(
                         screen,
                         colors.get(tile, FLOOR_COLOR),
                         (x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE),
                     )
+                    if tile == "C":
+                        center_x = x * TILE_SIZE + TILE_SIZE // 2
+                        center_y = y * TILE_SIZE + TILE_SIZE // 2
+                        pygame.draw.polygon(
+                            screen,
+                            WHITE,
+                            (
+                                (center_x, center_y - 9),
+                                (center_x + 7, center_y),
+                                (center_x, center_y + 9),
+                                (center_x - 7, center_y),
+                            ),
+                        )

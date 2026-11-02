@@ -10,6 +10,7 @@ class Player:
 
         self.x, self.y = start_position
         self.has_key = False
+        self.crystals_collected = 0
 
         image_path = os.path.join(IMAGE_DIR, "player.png")
 
@@ -26,7 +27,7 @@ class Player:
         new_x = self.x + dx
         new_y = self.y + dy
 
-        if maze.can_enter(new_x, new_y, self.has_key):
+        if maze.can_enter(new_x, new_y, self.has_key, self.crystals_collected):
 
             self.x = new_x
             self.y = new_y

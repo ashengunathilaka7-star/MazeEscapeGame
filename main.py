@@ -34,13 +34,16 @@ score = 0
 game_state = "playing"
 maze = None
 player = None
+MOVE_INTERVAL = 130
+next_move_time = 0
 
 
 def load_mission():
-    global maze, player, game_state
+    global maze, player, game_state, next_move_time
     maze = Maze(current_mission)
     player = Player(maze.start)
     game_state = "playing"
+    next_move_time = 0
 
 
 def draw_text(text, font_style, color, x, y, center=False):
@@ -55,11 +58,18 @@ def draw_text(text, font_style, color, x, y, center=False):
 def draw_hud():
     info = get_level_info(current_mission)
     pygame.draw.rect(screen, BLACK, (0, 608, SCREEN_WIDTH, 64))
-    draw_text(f"Mission: {current_mission}/{TOTAL_MISSIONS}", font, WHITE, 15, 615)
-    draw_text(f"Score: {score}", font, WHITE, 240, 615)
-    draw_text(f"Key: {'Collected' if player.has_key else 'Not collected'}", small_font, WHITE, 470, 620)
+    draw_text(f"Mission: {current_mission}/{TOTAL_MISSIONS}", small_font, WHITE, 12, 620)
+    draw_text(f"Score: {score}", small_font, WHITE, 190, 620)
+    draw_text(
+        f"Crystals: {player.crystals_collected}/{len(maze.crystal_positions)}",
+        small_font,
+        WHITE,
+        320,
+        620,
+    )
+    draw_text(f"Key: {'Yes' if player.has_key else 'No'}", small_font, WHITE, 525, 620)
     if info:
-        draw_text(info["difficulty"], small_font, WHITE, 650, 620)
+        draw_text(info["difficulty"], small_font, WHITE, 690, 620)
 
 
 def draw_game():
@@ -88,22 +98,8 @@ def draw_victory():
     pygame.display.flip()
 
 
-def handle_movement(key):
-    direction_map = {
-        pygame.K_UP: (0, -1),
-        pygame.K_DOWN: (0, 1),
-        pygame.K_LEFT: (-1, 0),
-        pygame.K_RIGHT: (1, 0),
-        pygame.K_w: (0, -1),
-        pygame.K_s: (0, 1),
-        pygame.K_a: (-1, 0),
-        pygame.K_d: (1, 0),
-    }
-
-    dx, dy = direction_map.get(key, (0, 0))
-    if dx == dy == 0:
-        return
-
+def handle_movement(dx, dy):
+    global score, game_state
     if not player.move(dx, dy, maze):
         return
 
@@ -113,12 +109,17 @@ def handle_movement(key):
         maze.remove_object(player.x, player.y)
         if "collect" in maze.sounds:
             maze.sounds["collect"].play()
+    elif tile == "C":
+        player.crystals_collected += 1
+        score += 100
+        maze.remove_object(player.x, player.y)
+        if "collect" in maze.sounds:
+            maze.sounds["collect"].play()
     elif tile == "D" and player.has_key:
         maze.remove_object(player.x, player.y)
         if "door" in maze.sounds:
             maze.sounds["door"].play()
     elif tile == "E":
-        global score, game_state
         score += 1000
         game_state = "completed"
         if victory_sound:
@@ -126,7 +127,7 @@ def handle_movement(key):
 
 
 def main():
-    global current_mission, score
+    global current_mission, score, next_move_time
 
     load_mission()
     running = True
@@ -142,14 +143,34 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
-                if game_state == "playing":
-                    handle_movement(event.key)
-                elif game_state == "completed":
+                if game_state == "completed":
                     if event.key == pygame.K_SPACE and current_mission < TOTAL_MISSIONS:
                         current_mission += 1
                         load_mission()
 
         if game_state == "playing":
+            keys = pygame.key.get_pressed()
+            direction_keys = (
+                (pygame.K_UP, pygame.K_w, 0, -1),
+                (pygame.K_DOWN, pygame.K_s, 0, 1),
+                (pygame.K_LEFT, pygame.K_a, -1, 0),
+                (pygame.K_RIGHT, pygame.K_d, 1, 0),
+            )
+            direction = next(
+                (
+                    (dx, dy)
+                    for arrow, wasd, dx, dy in direction_keys
+                    if keys[arrow] or keys[wasd]
+                ),
+                None,
+            )
+            now = pygame.time.get_ticks()
+            if direction and now >= next_move_time:
+                dx, dy = direction
+                handle_movement(dx, dy)
+                next_move_time = now + MOVE_INTERVAL
+            elif not direction:
+                next_move_time = 0
             draw_game()
         elif game_state == "completed":
             draw_victory()
